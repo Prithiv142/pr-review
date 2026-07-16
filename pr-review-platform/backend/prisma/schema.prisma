@@ -1,0 +1,35 @@
+// Prisma schema for the review dashboard backend.
+// Deploy target: any Postgres instance (Supabase, Neon, Render Postgres, etc.)
+// Run `npx prisma migrate deploy` after setting DATABASE_URL.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Review {
+  id                String   @id @default(cuid())
+  repo              String
+  prNumber          Int
+  sourceBranch      String
+  targetBranch      String
+  commitSha         String
+  findings          Json // array of { file, line, severity, message, source }
+  bugId             String? // work item ID extracted from the PR title, if any
+  bugFixVerification Json?  // { bugId, title, verdict, explanation } or null
+  createdAt         DateTime @default(now())
+
+  @@index([targetBranch])
+  @@index([sourceBranch])
+  @@index([prNumber])
+}
+
+model BranchConfig {
+  branchName String  @id
+  isEnabled  Boolean @default(false)
+  updatedAt  DateTime @updatedAt
+}

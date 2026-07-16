@@ -1,0 +1,12 @@
+{
+  "name": "pr-review-engine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Runs static + AI-based review on a PR and reports results to the dashboard backend and PR comments.",
+  "type": "commonjs",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "@octokit/rest": "^21.0.0",
+    "node-fetch": "^2.7.0"
+  }
+}
