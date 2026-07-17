@@ -8,7 +8,7 @@ const API_KEY = process.env.BACKEND_API_KEY;
 export async function setBranchEnabled(branchName, isEnabled) {
   if (!branchName) return;
 
-  await fetch(`${BACKEND_URL}/api/config/branches/${encodeURIComponent(branchName)}`, {
+  const res = await fetch(`${BACKEND_URL}/api/config/branches/${encodeURIComponent(branchName)}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -16,6 +16,11 @@ export async function setBranchEnabled(branchName, isEnabled) {
     },
     body: JSON.stringify({ isEnabled }),
   });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Failed to update branch "${branchName}" (${res.status}): ${text}`);
+  }
 
   revalidatePath("/settings");
 }
@@ -27,9 +32,15 @@ export async function addBranch(formData) {
 }
 
 export async function removeBranch(branchName) {
-  await fetch(`${BACKEND_URL}/api/config/branches/${encodeURIComponent(branchName)}`, {
+  const res = await fetch(`${BACKEND_URL}/api/config/branches/${encodeURIComponent(branchName)}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${API_KEY}` },
   });
+
+  if (!res.ok && res.status !== 204) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Failed to remove branch "${branchName}" (${res.status}): ${text}`);
+  }
+
   revalidatePath("/settings");
 }
