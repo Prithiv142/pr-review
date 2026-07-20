@@ -1,0 +1,81 @@
+# Runs automated review when a PR is opened or updated.
+# Copy this file and scripts/review/ into the target repo (e.g. PolicyManagementSPFx).
+# Eligibility is controlled from the dashboard — only enabled target branches are reviewed.
+
+name: Automated PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install review script dependencies
+        working-directory: scripts/review
+        run: npm install
+
+      - name: Check branch eligibility
+        id: eligibility
+        working-directory: scripts/review
+        env:
+          BACKEND_URL: ${{ secrets.REVIEW_BACKEND_URL }}
+          BACKEND_API_KEY: ${{ secrets.REVIEW_BACKEND_API_KEY }}
+          TARGET_BRANCH: ${{ github.base_ref }}
+        run: node checkEligibility.js
+
+      - name: Install project dependencies
+        if: steps.eligibility.outputs.enabled == 'true'
+        run: npm ci
+
+      - name: Run static checks
+        if: steps.eligibility.outputs.enabled == 'true'
+        run: node scripts/review/staticChecks.js
+
+      - name: Run AI review
+        if: steps.eligibility.outputs.enabled == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          AZURE_DEVOPS_ORG: ${{ secrets.AZURE_DEVOPS_ORG }}
+          AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
+          BUG_ID_REGEX: ${{ vars.BUG_ID_REGEX }}
+        run: node scripts/review/aiReview.js
+
+      - name: Send results to dashboard
+        if: steps.eligibility.outputs.enabled == 'true'
+        env:
+          BACKEND_URL: ${{ secrets.REVIEW_BACKEND_URL }}
+          BACKEND_API_KEY: ${{ secrets.REVIEW_BACKEND_API_KEY }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SOURCE_BRANCH: ${{ github.head_ref }}
+          TARGET_BRANCH: ${{ github.base_ref }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/review/sendResults.js
+
+      - name: Post PR comment
+        if: steps.eligibility.outputs.enabled == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/review/postComment.js
