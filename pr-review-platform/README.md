@@ -14,8 +14,9 @@ use **Run review** on the dashboard instead:
 
 1. Enable the target branch in **Settings** (e.g. `Dev`)
 2. Add these env vars on **Render** (backend):
-   - `GITHUB_TOKEN` — PAT with `repo` + `write:discussion` or `public_repo` + issues write for public repos
-   - `ANTHROPIC_API_KEY`
+   - `GITHUB_TOKEN` — PAT with `repo` + issues write for PR comments
+   - `AI_PROVIDER=gemini` and `GEMINI_API_KEY` — **free** from [Google AI Studio](https://aistudio.google.com/apikey) (no credit card)
+   - Or `AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` — paid Anthropic API
    - `AZURE_DEVOPS_ORG` / `AZURE_DEVOPS_PAT` (optional, for bug verification)
 3. Open **Run review**, paste the PR URL, click **Run review**
 4. Results appear on the dashboard and as a comment on the PR

@@ -39,10 +39,88 @@ const WITHOUT_BUG_SUFFIX = `
 
 If there is nothing worth flagging, use an empty findings array.`;
 
-async function runAiReview({ diff, prTitle }) {
+function parseModelJson(text) {
+  const cleaned = text.replace(/```json|```/g, "").trim();
+  return JSON.parse(cleaned);
+}
+
+async function callGemini({ systemPrompt, userContent }) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not configured on the backend.");
+  }
+
+  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: "user", parts: [{ text: userContent }] }],
+      generationConfig: {
+        maxOutputTokens: 4000,
+        temperature: 0.2,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Gemini API error (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    throw new Error("No text response from Gemini.");
+  }
+
+  return text;
+}
+
+async function callAnthropic({ systemPrompt, userContent }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY is not configured on the backend.");
+  }
+
+  const client = new Anthropic({ apiKey });
+  const response = await client.messages.create({
+    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
+    max_tokens: 4000,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userContent }],
+  });
+
+  const textBlock = response.content.find((b) => b.type === "text");
+  if (!textBlock) {
+    throw new Error("No text response from Claude.");
+  }
+
+  return textBlock.text;
+}
+
+async function callAiModel({ systemPrompt, userContent }) {
+  const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+
+  if (provider === "anthropic") {
+    return callAnthropic({ systemPrompt, userContent });
+  }
+
+  if (provider === "gemini") {
+    return callGemini({ systemPrompt, userContent });
+  }
+
+  throw new Error(`Unsupported AI_PROVIDER "${provider}". Use "gemini" or "anthropic".`);
+}
+
+async function runAiReview({ diff, prTitle }) {
+  if (!process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    throw new Error(
+      "No AI key configured. Set GEMINI_API_KEY (free) or ANTHROPIC_API_KEY on the backend."
+    );
   }
 
   let trimmedDiff = diff;
@@ -66,25 +144,13 @@ async function runAiReview({ diff, prTitle }) {
     userContent += `\n\n---\n\nThis PR claims to fix Azure DevOps work item #${workItem.id} (${workItem.workItemType}, state: ${workItem.state}):\n\nTitle: ${workItem.title}\n\nDescription:\n${workItem.description || "(no description provided)"}\n\nAssess whether the diff above actually addresses this bug.`;
   }
 
-  const client = new Anthropic({ apiKey });
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 4000,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userContent }],
-  });
-
-  const textBlock = response.content.find((b) => b.type === "text");
-  if (!textBlock) {
-    throw new Error("No text response from Claude.");
-  }
+  const rawText = await callAiModel({ systemPrompt, userContent });
 
   let parsed;
   try {
-    const cleaned = textBlock.text.replace(/```json|```/g, "").trim();
-    parsed = JSON.parse(cleaned);
+    parsed = parseModelJson(rawText);
   } catch (err) {
-    throw new Error(`Failed to parse Claude response: ${err.message}`);
+    throw new Error(`Failed to parse AI response: ${err.message}`);
   }
 
   const findings = (parsed.findings || []).map((f) => ({
