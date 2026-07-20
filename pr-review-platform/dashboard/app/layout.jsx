@@ -11,6 +11,7 @@ export default function RootLayout({ children }) {
       <body>
         <nav style={{ display: "flex", gap: 16, padding: "16px 24px", borderBottom: "1px solid #333" }}>
           <a href="/">Reviews</a>
+          <a href="/run">Run review</a>
           <a href="/settings">Settings</a>
         </nav>
         <main style={{ padding: "24px" }}>{children}</main>

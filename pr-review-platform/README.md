@@ -7,7 +7,22 @@ every run in a dashboard you can filter by source branch.
 
 Non-blocking (comment only) — no merges are ever blocked by this.
 
-## How it fits together
+## Manual mode (no repo changes required)
+
+If you **cannot** add a GitHub Action to the target repo (e.g. company policy),
+use **Run review** on the dashboard instead:
+
+1. Enable the target branch in **Settings** (e.g. `Dev`)
+2. Add these env vars on **Render** (backend):
+   - `GITHUB_TOKEN` — PAT with `repo` + `write:discussion` or `public_repo` + issues write for public repos
+   - `ANTHROPIC_API_KEY`
+   - `AZURE_DEVOPS_ORG` / `AZURE_DEVOPS_PAT` (optional, for bug verification)
+3. Open **Run review**, paste the PR URL, click **Run review**
+4. Results appear on the dashboard and as a comment on the PR
+
+No workflow files or secrets are needed in PolicyManagementSPFx.
+
+## How it fits together (automatic mode — optional)
 
 ```
 GitHub PR (branch → Dev)
@@ -38,7 +53,7 @@ npx prisma migrate deploy
 - Push `backend/` as its own service (or a monorepo with a root directory set to `backend`).
 - Build command: `npm install && npx prisma generate`
 - Start command: `npm start`
-- Environment variables: `DATABASE_URL`, `API_KEY`, `PORT` (Render sets this automatically)
+- Environment variables: `DATABASE_URL`, `DIRECT_URL`, `API_KEY`, `GITHUB_TOKEN`, `ANTHROPIC_API_KEY`, `AZURE_DEVOPS_ORG`, `AZURE_DEVOPS_PAT` (last three for manual reviews / bug verification)
 - After first deploy, run `npx prisma migrate deploy` once (Render shell or a one-off job) to create tables.
 
 Once deployed you'll have a URL like `https://pr-review-backend.onrender.com`.
